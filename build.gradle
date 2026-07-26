@@ -1,0 +1,13 @@
+buildscript {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.4.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'
+        classpath 'com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.9.20-1.0.14'
+    }
+}
