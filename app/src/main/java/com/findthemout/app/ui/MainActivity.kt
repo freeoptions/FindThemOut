@@ -402,7 +402,7 @@ private fun FolderManagementScreen(
         AlertDialog(
             onDismissRequest = { folderToDelete = null },
             title = { Text("移除固定文件夹") },
-            text = { Text("这里只会把它从找图助手的固定列表里移除，不会删除手机里的真实文件。") },
+            text = { Text("这里只会把它从 FindThemOut 的固定列表里移除，不会删除手机里的真实文件。") },
             confirmButton = {
                 TextButton(onClick = {
                     folderToDelete = null
@@ -1312,7 +1312,7 @@ private fun FolderSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("找图助手", style = MaterialTheme.typography.headlineSmall)
+                Text("FindThemOut", style = MaterialTheme.typography.headlineSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
                         shape = CircleShape,
