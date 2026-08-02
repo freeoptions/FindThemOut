@@ -2,7 +2,9 @@ package com.findthemout.app.scan
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
+import android.os.Build
 import androidx.exifinterface.media.ExifInterface
 import com.findthemout.app.data.ImageFingerprintCache
 import com.findthemout.app.data.ImageFingerprintCacheDao
@@ -204,7 +206,7 @@ object SimilarImageScanner {
                     child.length() > 0L &&
                     !child.name.startsWith(".") &&
                     !child.name.startsWith(".trashed-", ignoreCase = true) &&
-                    child.extension.lowercase(Locale.getDefault()) in supportedImageExtensions
+                    child.extension.lowercase(Locale.ROOT) in supportedImageExtensions
                 ) {
                     results.putIfAbsent(child.absolutePath, child)
                 }
@@ -396,22 +398,14 @@ object SimilarImageScanner {
     }
 
     private fun buildFingerprint(file: File): ImageFingerprint? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            return null
+        val decodedBitmap = decodeSampledBitmap(file) ?: return null
+        val bitmap = decodedBitmap.bitmap
+
+        val orientedBitmap = if (decodedBitmap.exifOrientationApplied) {
+            bitmap
+        } else {
+            applyExifOrientation(file, bitmap)
         }
-
-        val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, PHASH_SIZE, PHASH_SIZE)
-        val bitmap = BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            },
-        ) ?: return null
-
-        val orientedBitmap = applyExifOrientation(file, bitmap)
         val outputWidth = orientedBitmap.width
         val outputHeight = orientedBitmap.height
         val pHashBitmap = Bitmap.createScaledBitmap(orientedBitmap, PHASH_SIZE, PHASH_SIZE, true)
@@ -440,6 +434,68 @@ object SimilarImageScanner {
 
         return fingerprint
     }
+
+    private fun decodeSampledBitmap(file: File): DecodedBitmap? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && file.isHeifFile()) {
+            decodeWithImageDecoder(file)?.let { bitmap ->
+                return DecodedBitmap(bitmap = bitmap, exifOrientationApplied = true)
+            }
+        }
+
+        return decodeWithBitmapFactory(file)?.let { bitmap ->
+            DecodedBitmap(bitmap = bitmap, exifOrientationApplied = false)
+        }
+    }
+
+    /**
+     * ImageDecoder is the platform decoder for HEIF/HEIC on Android 9+ and
+     * respects the file's EXIF orientation while decoding.
+     */
+    private fun decodeWithImageDecoder(file: File): Bitmap? {
+        return try {
+            val source = ImageDecoder.createSource(file)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                decoder.setTargetSampleSize(
+                    calculateInSampleSize(
+                        info.size.width,
+                        info.size.height,
+                        PHASH_SIZE,
+                        PHASH_SIZE,
+                    ),
+                )
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun decodeWithBitmapFactory(file: File): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return null
+        }
+
+        val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, PHASH_SIZE, PHASH_SIZE)
+        return BitmapFactory.decodeFile(
+            file.absolutePath,
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            },
+        )
+    }
+
+    private fun File.isHeifFile(): Boolean {
+        val normalizedExtension = extension.lowercase(Locale.ROOT)
+        return normalizedExtension == "heic" || normalizedExtension == "heif"
+    }
+
+    private data class DecodedBitmap(
+        val bitmap: Bitmap,
+        val exifOrientationApplied: Boolean,
+    )
 
     private fun applyExifOrientation(file: File, bitmap: Bitmap): Bitmap {
         val exif = try {
