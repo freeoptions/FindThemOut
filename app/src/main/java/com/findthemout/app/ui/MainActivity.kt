@@ -158,6 +158,10 @@ private fun FindThemOutApp() {
     var isScanning by remember { mutableStateOf(false) }
     var scanJob by remember { mutableStateOf<Job?>(null) }
 
+    BackHandler(enabled = selectedTab != 0) {
+        selectedTab = 0
+    }
+
     fun startScan(folderPaths: List<String>) {
         if (folderPaths.isEmpty() || isScanning) return
         scanJob?.cancel()
